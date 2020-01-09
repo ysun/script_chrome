@@ -25,7 +25,7 @@ class Case:
 		self.do_run()
 
 	def do_run(self):
-		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog],
+		p_turbostat = subprocess.Popen(['ssh 100.115.92.25 turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog],
 			shell=True)
 #			stdout = subprocess.PIPE,
 #			stderr = subprocess.PIPE,
@@ -91,13 +91,13 @@ def run_cases():
 	######## Add test cases here! #############
 #	case1 = Case("ping 127.0.0.1 -c 15", "test.log")
 
-	case1 = Case("fio -filename=/mnt/stateful_partition/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=2 -name=fio_read", "/mnt/stateful_partition/fio_read.log", "/mnt/stateful_partition/turbostat_read.log")
-	case2 = Case("fio -filename=/mnt/stateful_partition/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=2 -name=fio_write", "/mnt/stateful_partition/fio_write.log", "/mnt/stateful_partition/turbostat_write.log")
-	case3 = Case("fio -filename=/mnt/stateful_partition/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=2 -name=fio_randread", "/mnt/stateful_partition/fio_randread.log", "/mnt/stateful_partition/turbostat_randread.log")
-	case4 = Case("fio -filename=/mnt/stateful_partition/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite", "/mnt/stateful_partition/fio_randwrite.log", "/mnt/stateful_partition/turbostat_randwrite.log")
-	case5 = Case("iperf3 -c 127.0.0.1 -t 60 -i 60", "/mnt/stateful_partition/iperf.log", "/mnt/stateful_partition/turbostat_iperf.log")
-	case6 = Case("netperf -H 127.0.0.1 -t tcp_stream -l 60", "/mnt/stateful_partition/netperf_stream.log", "/mnt/stateful_partition/turbostat_netperf_stream.log")
-	case7 = Case("netperf -H 127.0.0.1 -t tcp_rr -l 20", "/mnt/stateful_partition/netperf_rr.log", "/mnt/stateful_partition/turbostat_netperf_rr.log")
+	case1 = Case("fio -filename=/results/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=2 -name=fio_read", "/results/fio_read.log", "//mnt/stateful_partition/results_guest//turbostat_read.log")
+	case2 = Case("fio -filename=/results/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=2 -name=fio_write", "/results/fio_write.log", "//mnt/stateful_partition/results_guest//turbostat_write.log")
+	case3 = Case("fio -filename=/results/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=2 -name=fio_randread", "/results/fio_randread.log", "//mnt/stateful_partition/results_guest//turbostat_randread.log")
+	case4 = Case("fio -filename=/results/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite", "/results/fio_randwrite.log", "//mnt/stateful_partition/results_guest//turbostat_randwrite.log")
+	case5 = Case("iperf3 -c 127.0.0.1 -t 60 -i 60", "/results/iperf.log", "//mnt/stateful_partition/results_guest//turbostat_iperf.log")
+	case6 = Case("netperf -H 127.0.0.1 -t tcp_stream -l 60", "/results/netperf_stream.log", "//mnt/stateful_partition/results_guest//turbostat_netperf_stream.log")
+	case7 = Case("netperf -H 127.0.0.1 -t tcp_rr -l 20", "/results/netperf_rr.log", "//mnt/stateful_partition/results_guest//turbostat_netperf_rr.log")
 
 
 if __name__ == "__main__":
