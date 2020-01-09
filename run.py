@@ -5,12 +5,20 @@ import sys,os
 import getopt, sys
 
 import argparse
+ 
+import signal
+
 
 GBK = 'gbk'
 UTF8 = 'utf-8'
 current_encoding = GBK
 
 g_directory="/mnt/stateful_partition/results/"
+
+def signal_handler(sig, frame):
+	print('Interruptted by user! (Ctrl+C)')
+	sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
 class Case:
 	bin_case=""
@@ -63,37 +71,25 @@ class Case:
 		    self.file_testlog.flush()
 		
 		self.file_testlog.close()
+		p_turbostat.kill()
 		print("[Done]")
 #		self.file_turbostatlog.close()
 
 def main():
-	try:
-            opts, args = getopt.getopt(sys.argv[1:], "d:r:h", ["directory", "run", "help"])
-	except getopt.GetoptError as err:
-		print(err)  # will print something like "option -a not recognized"
-#		usage()
-		sys.exit(2)
-	output = None
-	verbose = False
-	for o, a in opts:
-		if o in ("-r", "--run"):
-			bin_case=a
-			print(a)
-		elif o in ("-h", "--help"):
-			print("usage()")
-			sys.exit()
-		elif o in ("-d", "--directory"):
-                    global g_directory
-                    g_directory = a
+	parser = argparse.ArgumentParser(description='This is a simple automated test framework for ChromeOS and Linux VM')
+	parser.add_argument('-d','--directory',
+		help='The directory for saving results and logs',
+		default='/mnt/stateful_partition/results/')
 
-                    if not os.path.exists(g_directory):
-                            os.makedirs(g_directory)
+	args = parser.parse_args()
 
-		else:
-			assert False, "unhandled option"
+	global g_directory
+	g_directory = getattr(args, 'directory')
+
+	if not os.path.exists(g_directory):
+		os.makedirs(g_directory)
 
 	run_cases()
-
 
 def run_cases():
 	######## Add test cases here! #############
@@ -110,4 +106,3 @@ def run_cases():
 
 if __name__ == "__main__":
     main()
-
