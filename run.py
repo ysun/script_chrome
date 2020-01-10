@@ -61,7 +61,7 @@ class Case:
 		return ret
 
 	def do_run(self):
-		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog],
+		p_turbostat = subprocess.Popen(['ssh 100.115.92.25 turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog],
 			shell=True)
 # Do not handle stdout/errout of turbostat
 # Use its output augument instead.
@@ -100,6 +100,8 @@ class Case:
 		
 		self.file_testlog.close()
 		p_turbostat.kill()
+
+		p_turbostat = subprocess.run(['ssh 100.115.92.25 pkill turbostat'], shell=True)
 		print("[Done]")
 #		self.file_turbostatlog.close()
 
