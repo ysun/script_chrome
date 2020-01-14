@@ -139,13 +139,13 @@ def run_cases():
 	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite"%g_directory, "%s/fio_randwrite.log"%g_directory, "%s/turbostat_randwrite.log"%g_directory)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("iperf3", "iperf3 -c 127.0.0.1 -t 60 -i 60", "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory)
+	case = Case("iperf3", "iperf3 -c 100.115.92.25 -t 60 -i 60", "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory)
 	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 0)
 
-	case = Case("netperf-tcp_stream", "netperf -H 127.0.0.1 -t tcp_stream -l 60", "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory)
+	case = Case("netperf-tcp_stream", "netperf -H 100.115.92.25 -t tcp_stream -l 60", "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory)
 	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
 
-	case = Case("netperf-rr", "netperf -H 127.0.0.1 -t tcp_rr -l 20", "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory)
+	case = Case("netperf-rr", "netperf -H 100.115.92.25 -t tcp_rr -l 20", "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory)
 	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
 
 
