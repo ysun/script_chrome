@@ -9,17 +9,30 @@ import argparse
 import signal
 import re
 
+import socket
+
+
 
 GBK = 'gbk'
 UTF8 = 'utf-8'
 current_encoding = GBK
 
 g_directory="/mnt/stateful_partition/results/"
+g_logfile="./run.log"
+g_ip_guest=""
+g_ip_host="100.115.92.1"
+
 g_results_list = dict()
+
+g_bool_max_cpu=False
+g_bool_max_gpu=False
 
 def signal_handler(sig, frame):
 	print('Interruptted by user! (Ctrl+C)')
+
+	subprocess.run(['ssh %s pkill turbostat' %g_ip_host], shell=True)
 	sys.exit(0)
+
 signal.signal(signal.SIGINT, signal_handler)
 
 
@@ -29,14 +42,16 @@ class Case:
 	file_testlog="test.log"
 	file_turbostatlog="turbostat.log"
 	result=""
+	is_guest=False
 
 	output_std=""
 
-	def __init__(self, case_name, bin_case, file_testlog, file_turbostatlog):
+	def __init__(self, case_name, bin_case, file_testlog, file_turbostatlog, is_guest):
 		self.case_name = case_name
 		self.bin_case = bin_case
 		self.file_testlog = file_testlog
 		self.file_turbostatlog = file_turbostatlog
+		self.is_guest = is_guest
 
 		self.file_testlog = open(file_testlog, "w")
 #		self.file_turbostatlog = open(file_turbostatlog, "w")
@@ -61,6 +76,12 @@ class Case:
 		return ret
 
 	def do_run(self):
+		if self.is_guest:
+			self.do_run_guest()
+		else:
+			self.do_run_host()
+
+	def do_run_host(self):
 		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog],
 			shell=True)
 # Do not handle stdout/errout of turbostat
@@ -103,48 +124,136 @@ class Case:
 		print("[Done]")
 #		self.file_turbostatlog.close()
 
+	def do_run_guest(self):
+		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(g_ip_host, self.file_turbostatlog)],
+			shell=True)
+
+		print("[Running]: %s"%self.bin_case)
+		p_test = subprocess.Popen([self.bin_case],
+			shell=True,
+			stdout = subprocess.PIPE,
+			stderr = subprocess.PIPE,
+			bufsize=0)
+
+		while p_test.poll() is None:
+		    std_out = p_test.stdout.read().decode(current_encoding)
+		    self.output_std = std_out
+
+		    self.file_testlog.write(std_out)
+		    self.file_testlog.flush()
+
+		if p_test.poll() != 0:
+		    err = p_test.stderr.read().decode(current_encoding)
+		    sys.stdout.write(err)
+		    self.file_testlog.write(err)
+		    self.file_testlog.flush()
+
+		self.file_testlog.close()
+		p_turbostat.kill()
+		p_turbostat = subprocess.run(['ssh %s pkill turbostat'%g_ip_host], shell=True)
+		print("[Done]")
+
+def run_cases_host():
+	print("here is host")
+	run_cases(False)
+
+# For host specified test case, create here
+	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_guest, "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory, False)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 0)
+
+	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_guest, "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory, False)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
+
+	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_guest, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, False)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
+
+
+def run_cases_guest():
+	print("here is guest")
+	if g_ip_guest == "":
+		g_ip_guest = [(s.connect(('100.115.92.1', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
+
+	run_cases(True)
+
+# For guest specified test case, create here
+	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_host, "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory, True)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 0)
+
+	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_host, "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory, True)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
+
+	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_host, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, True)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
+
+
+def run_cases(is_guest):
+	######## Add test cases here! For common test cases #############
+	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=2 -name=fio_read"%g_directory, "%s/fio_read.log"%g_directory, "%s/turbostat_read.log"%g_directory, is_guest)
+	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
+
+	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=2 -name=fio_write"%g_directory, "%s/fio_write.log"%g_directory, "%s/turbostat_write.log"%g_directory, is_guest)
+	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
+
+	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=2 -name=fio_randread"%g_directory, "%s/fio_randread.log"%g_directory, "%s/turbostat_randread.log"%g_directory, is_guest)
+	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
+
+	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite"%g_directory, "%s/fio_randwrite.log"%g_directory, "%s/turbostat_randwrite.log"%g_directory, is_guest)
+	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
+
 def main():
+	global g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest
+	g_log = open(g_logfile, "w")
+
+# Add global arguments!
 	parser = argparse.ArgumentParser(description='This is a simple automated test framework for ChromeOS and Linux VM')
-	parser.add_argument('-d','--directory',
-		help='The directory for saving results and logs',
-		default='/mnt/stateful_partition/results/')
+	parser.add_argument('-d','--directory', default='/mnt/stateful_partition/results/',
+		help='The directory for saving results and logs')
+	parser.add_argument('-c', '--max-cpu', action="store_true", default=False, dest='bool_max_cpu',
+		help='Online all CPU cores, only 2 out of 4 cores are enabled by default on Pixelbook; And force cpus running at highest freq!')
+	parser.add_argument('-g', '--max-gpu', action="store_true", default=False, dest='bool_max_gpu',
+		help='Force GPU running with highest freqency!')
+	parser.add_argument('-H', '--host-ip', action="store", default="100.115.92.1", dest='ip_host',
+		help='Specify IP of host side, default is 100.115.92.25 which is default value of pixelbook')
+	parser.add_argument('-G', '--guest-ip', action="store", default="100.115.92.194", dest='ip_guest',
+		help='Specify IP of guest side, which is random, have to be given')
+
+
+# Add sub-command and its arguments!
+	subparsers = parser.add_subparsers()
+
+	parser_host = subparsers.add_parser('host', help="Run this test framework on a host machine")
+	parser_host.set_defaults(func=run_cases_host)
+	parser_host = subparsers.add_parser('guest', help="Run this test framework on a VM")
+	parser_host.set_defaults(func=run_cases_guest)
 
 	args = parser.parse_args()
-
-	global g_directory
 	g_directory = getattr(args, 'directory')
+	g_bool_max_cpu = args.bool_max_cpu
+	g_bool_max_gpu = args.bool_max_gpu
+	g_ip_host = args.ip_host
+	g_ip_guest = args.ip_guest
 
+# Sanity Check
 	if not os.path.exists(g_directory):
 		os.makedirs(g_directory)
 
-	run_cases()
+	if g_bool_max_cpu:
+		subprocess.call(["./max_cpu.sh"], stdout=g_log, stderr=g_log)
+
+	if g_bool_max_gpu:
+		subprocess.call(["./max_gpu.sh"], stdout=g_log, stderr=g_log)
+
+	print("cpu: %s, gpu: %s directory: %s" %(g_bool_max_cpu, g_bool_max_gpu, g_directory))
+	print("%s" %(args))
+
+# Run test cases, distinguish host and guest which given by command arguments
+	args.func()
+
+
 	print(g_results_list)
 
 	for key,value in g_results_list.items():
 		print('%s %s'%(key,value))
-
-def run_cases():
-	######## Add test cases here! #############
-	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=2 -name=fio_read"%g_directory, "%s/fio_read.log"%g_directory, "%s/turbostat_read.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
-
-	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=2 -name=fio_write"%g_directory, "%s/fio_write.log"%g_directory, "%s/turbostat_write.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
-
-	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=2 -name=fio_randread"%g_directory, "%s/fio_randread.log"%g_directory, "%s/turbostat_randread.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
-
-	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite"%g_directory, "%s/fio_randwrite.log"%g_directory, "%s/turbostat_randwrite.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
-
-	case = Case("iperf3", "iperf3 -c 100.115.92.206 -t 60 -i 60", "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 0)
-
-	case = Case("netperf-tcp_stream", "netperf -H 100.115.92.206 -t tcp_stream -l 60", "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
-
-	case = Case("netperf-rr", "netperf -H 100.115.92.206 -t tcp_rr -l 20", "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
 
 
 if __name__ == "__main__":
