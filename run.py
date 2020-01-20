@@ -11,13 +11,14 @@ import re
 
 import socket
 
+import time
 
 
 GBK = 'gbk'
 UTF8 = 'utf-8'
 current_encoding = GBK
 
-g_directory="/mnt/stateful_partition/results/"
+g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
 g_logfile="./run.log"
 g_ip_guest=""
 g_ip_host="100.115.92.1"
@@ -155,18 +156,17 @@ class Case:
 
 def run_cases_host():
 	print("here is host")
-	run_cases(False)
+#	run_cases(False)
 
 # For host specified test case, create here
 	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_guest, "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory, False)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 0)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 7)
 
 	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_guest, "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory, False)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
+	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
 
-	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_guest, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, False)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
-
+	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 60"%g_ip_guest, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, False)
+	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
 
 def run_cases_guest():
 	print("here is guest")
@@ -177,14 +177,13 @@ def run_cases_guest():
 
 # For guest specified test case, create here
 	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_host, "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory, True)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 0)
+	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 7)
 
 	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_host, "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory, True)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
+	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
 
 	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_host, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, True)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*)$', 6)
-
+	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
 
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
@@ -206,8 +205,8 @@ def main():
 
 # Add global arguments!
 	parser = argparse.ArgumentParser(description='This is a simple automated test framework for ChromeOS and Linux VM')
-	parser.add_argument('-d','--directory', default='/mnt/stateful_partition/results/',
-		help='The directory for saving results and logs')
+	parser.add_argument('-d','--directory',
+		help='The directory for saving results and logs. Default is /mnt/statefule_partation/<current_dateime>')
 	parser.add_argument('-c', '--max-cpu', action="store_true", default=False, dest='bool_max_cpu',
 		help='Online all CPU cores, only 2 out of 4 cores are enabled by default on Pixelbook; And force cpus running at highest freq!')
 	parser.add_argument('-g', '--max-gpu', action="store_true", default=False, dest='bool_max_gpu',
@@ -227,7 +226,10 @@ def main():
 	parser_host.set_defaults(func=run_cases_guest)
 
 	args = parser.parse_args()
-	g_directory = getattr(args, 'directory')
+	dir_output = getattr(args, 'directory')
+	if dir_output == "":
+		g_directory = dir_output
+
 	g_bool_max_cpu = args.bool_max_cpu
 	g_bool_max_gpu = args.bool_max_gpu
 	g_ip_host = args.ip_host
@@ -249,9 +251,7 @@ def main():
 # Run test cases, distinguish host and guest which given by command arguments
 	args.func()
 
-
 	print(g_results_list)
-
 	for key,value in g_results_list.items():
 		print('%s %s'%(key,value))
 
