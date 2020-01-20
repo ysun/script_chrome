@@ -40,23 +40,38 @@ signal.signal(signal.SIGINT, signal_handler)
 class Case:
 	bin_case=""
 	case_name=""
-	file_testlog="test.log"
-	file_turbostatlog="turbostat.log"
+	file_testlog=""
+	file_turbostatlog=""
+	fd_testlog=None
+	fd_turbostatlog=None
+	base_directory=g_directory
+	host_ip=g_ip_host
+
+	file_topcpulog=""
+	file_topgpulog=""
+	fd_topcpulog=None
+	fd_topgpulog=None
+
 	result=""
 	is_guest=False
 
 	output_std=""
 
-	def __init__(self, case_name, bin_case, file_testlog, file_turbostatlog, is_guest):
+	def __init__(self, case_name, bin_case, is_guest):
 		self.case_name = case_name
 		self.bin_case = bin_case
-		self.file_testlog = file_testlog
-		self.file_turbostatlog = file_turbostatlog
+		self.file_testlog = "%s/%s.log"%(self.base_directory, case_name)
+		self.file_turbostatlog = "%s/%s_turbostat.log"%(self.base_directory, case_name)
+		self.file_topcpulog = "%s/%s_topcpu.log"%(self.base_directory, case_name)
+		self.file_topgpulog = "%s/%s_topgpu.log"%(self.base_directory, case_name)
+
 		self.is_guest = is_guest
 
-		self.file_testlog = open(file_testlog, "w")
+		self.fd_testlog = open(self.file_testlog, "w")
+		self.fd_topcpulog = open(self.file_topcpulog, "w")
+		self.fd_topgpulog = open(self.file_topgpulog, "w")
 #		self.file_turbostatlog = open(file_turbostatlog, "w")
- 
+
 		self.do_run()
 
 	def result_parser(self, pattern, line_num=0):
@@ -83,8 +98,9 @@ class Case:
 			self.do_run_host()
 
 	def do_run_host(self):
-		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog],
-			shell=True)
+		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog], shell=True)
+		p_topcpu = subprocess.Popen(['./top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
+		p_topgpu = subprocess.Popen(['./top_gpu.sh'], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
 # Do not handle stdout/errout of turbostat
 # Use its output augument instead.
 #			stdout = subprocess.PIPE,
@@ -93,40 +109,45 @@ class Case:
 		
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
-		 	shell=True,
-		 	stdout = subprocess.PIPE,
-		 	stderr = subprocess.PIPE,
-		 	bufsize=0)
+			shell=True,
+			stdout = subprocess.PIPE,
+			stderr = subprocess.PIPE,
+			bufsize=0)
 		
 		while p_test.poll() is None:
-		    std_out = p_test.stdout.read().decode(current_encoding)
-		    self.output_std = std_out
+			std_out = p_test.stdout.read().decode(current_encoding)
+			self.output_std = std_out
 
-		    self.file_testlog.write(std_out)
+			self.fd_testlog.write(std_out)
 #		    sys.stdout.write(std_out)
-		    self.file_testlog.flush()
+			self.fd_testlog.flush()
 
 		
 # Do not handle stdout/errout of turbostat
 # Use its output augument instead.
 #		    r = p_turbostat.stdout.readline().decode(current_encoding)
-#		    self.file_turbostatlog.write(r)
-#		    self.file_turbostatlog.flush()
+#		    self.fd_turbostatlog.write(r)
+#		    self.fd_turbostatlog.flush()
 #		    sys.stdout.write(r)
 
 		if p_test.poll() != 0: 
-		    err = p_test.stderr.read().decode(current_encoding)
-		    sys.stdout.write(err)
-		    self.file_testlog.write(err)
-		    self.file_testlog.flush()
+			err = p_test.stderr.read().decode(current_encoding)
+			sys.stdout.write(err)
+			self.fd_testlog.write(err)
+			self.fd_testlog.flush()
 		
-		self.file_testlog.close()
+		self.fd_testlog.close()
 		p_turbostat.kill()
+		p_topcpu.kill()
+		p_topgpu.kill()
 		print("[Done]")
-#		self.file_turbostatlog.close()
+#		self.fd_turbostatlog.close()
 
 	def do_run_guest(self):
-		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(g_ip_host, self.file_turbostatlog)],
+		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(self.ip_host, self.file_turbostatlog)],
+		p_topcpu = subprocess.Popen(['top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
+		p_topgpu = subprocess.Popen(['top_gpu.sh'], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
+
 			shell=True)
 
 		print("[Running]: %s"%self.bin_case)
@@ -140,33 +161,38 @@ class Case:
 		    std_out = p_test.stdout.read().decode(current_encoding)
 		    self.output_std = std_out
 
-		    self.file_testlog.write(std_out)
-		    self.file_testlog.flush()
+		    self.fd_testlog.write(std_out)
+		    self.fd_testlog.flush()
 
 		if p_test.poll() != 0:
 		    err = p_test.stderr.read().decode(current_encoding)
 		    sys.stdout.write(err)
-		    self.file_testlog.write(err)
-		    self.file_testlog.flush()
+		    self.fd_testlog.write(err)
+		    self.fd_testlog.flush()
 
-		self.file_testlog.close()
+		self.fd_testlog.close()
 		p_turbostat.kill()
-		p_turbostat = subprocess.run(['ssh %s pkill turbostat'%g_ip_host], shell=True)
+		p_topcpu.kill()
+		p_topgpu.kill()
+
+		subprocess.run(['ssh %s pkill turbostat'%self.ip_host], shell=True)
+		subprocess.run(['ssh %s pkill top_cpu.sh'%self.ip_host], shell=True)
+		subprocess.run(['ssh %s pkill top_gpu.sh'%self.ip_host], shell=True)
 		print("[Done]")
 
 def run_cases_host():
 	print("here is host")
-#	run_cases(False)
+	run_cases(False)
 
 # For host specified test case, create here
-	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_guest, "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory, False)
+	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_guest, False)
 	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 7)
 
-	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_guest, "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory, False)
-	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
+	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_guest, False)
+	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
-	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 60"%g_ip_guest, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, False)
-	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
+	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 60"%g_ip_guest, False)
+	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
 def run_cases_guest():
 	print("here is guest")
@@ -176,27 +202,27 @@ def run_cases_guest():
 	run_cases(True)
 
 # For guest specified test case, create here
-	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_host, "%s/iperf3.log"%g_directory, "%s/turbostat_iperf3.log"%g_directory, True)
+	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_host, True)
 	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 7)
 
-	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_host, "%s/netperf_stream.log"%g_directory, "%s/turbostat_netperf_stream.log"%g_directory, True)
-	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
+	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_host, True)
+	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
-	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_host, "%s/netperf_rr.log"%g_directory, "%s/turbostat_netperf_rr.log"%g_directory, True)
-	g_results_list[case.case_name] = case.result_parser(r'\S* \S* \S* \S* (\S*)', 6)
+	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_host, True)
+	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
-	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=2 -name=fio_read"%g_directory, "%s/fio_read.log"%g_directory, "%s/turbostat_read.log"%g_directory, is_guest)
+	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=2 -name=fio_read"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=2 -name=fio_write"%g_directory, "%s/fio_write.log"%g_directory, "%s/turbostat_write.log"%g_directory, is_guest)
+	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=2 -name=fio_write"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=2 -name=fio_randread"%g_directory, "%s/fio_randread.log"%g_directory, "%s/turbostat_randread.log"%g_directory, is_guest)
+	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=2 -name=fio_randread"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite"%g_directory, "%s/fio_randwrite.log"%g_directory, "%s/turbostat_randwrite.log"%g_directory, is_guest)
+	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=2 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
 def main():
