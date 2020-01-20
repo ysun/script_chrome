@@ -45,7 +45,7 @@ class Case:
 	fd_testlog=None
 	fd_turbostatlog=None
 	base_directory=g_directory
-	host_ip=g_ip_host
+	ip_host=g_ip_host
 
 	file_topcpulog=""
 	file_topgpulog=""
@@ -144,12 +144,10 @@ class Case:
 #		self.fd_turbostatlog.close()
 
 	def do_run_guest(self):
-		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(self.ip_host, self.file_turbostatlog)],
-		p_topcpu = subprocess.Popen(['top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
-		p_topgpu = subprocess.Popen(['top_gpu.sh'], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
-
-			shell=True)
-
+		subprocess.call(['ssh %s mkdir -p %s'%(self.ip_host, self.base_directory)], shell=True)
+		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(self.ip_host, self.file_turbostatlog)],shell=True)
+		p_topcpu = subprocess.Popen(['ssh %s top_cpu.sh'%self.ip_host], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
+		p_topgpu = subprocess.Popen(['ssh %s top_gpu.sh'%self.ip_host], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
 			shell=True,
@@ -181,6 +179,7 @@ class Case:
 		print("[Done]")
 
 def run_cases_host():
+	global g_ip_guest
 	print("here is host")
 	run_cases(False)
 
@@ -195,6 +194,7 @@ def run_cases_host():
 	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
 def run_cases_guest():
+	global g_ip_guest
 	print("here is guest")
 	if g_ip_guest == "":
 		g_ip_guest = [(s.connect(('100.115.92.1', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
