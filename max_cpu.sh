@@ -6,7 +6,8 @@ for((i=1; i<4; i++)) {
 	echo 1 > /sys/devices/system/cpu/cpu${i}/online
 	echo "Force cpu${i} online, now is `cat /sys/devices/system/cpu/cpu${i}/online`"
 	sleep 1
-
+}
+for((i=0; i<4; i++)) {
 	echo performance > /sys/devices/system/cpu/cpu${i}/cpufreq/scaling_governor
 	echo "Force cpu${i} performance, now is `cat /sys/devices/system/cpu/cpu${i}/cpufreq/scaling_governor`"
 	sleep 1
