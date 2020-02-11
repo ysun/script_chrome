@@ -22,6 +22,7 @@ g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
 g_logfile="./run.log"
 g_ip_guest=""
 g_ip_host="100.115.92.1"
+g_test_cases=[]
 
 g_results_list = dict()
 
@@ -56,8 +57,11 @@ class Case:
 	is_guest=False
 
 	output_std=""
+	run_list=[]
+	is_skipped=False
 
 	def __init__(self, case_name, bin_case, is_guest):
+		self.run_list=g_test_cases
 		self.case_name = case_name
 		self.bin_case = bin_case
 		self.file_testlog = "%s/%s.log"%(self.base_directory, case_name)
@@ -70,11 +74,16 @@ class Case:
 		self.fd_testlog = open(self.file_testlog, "w")
 		self.fd_topcpulog = open(self.file_topcpulog, "w")
 		self.fd_topgpulog = open(self.file_topgpulog, "w")
+
+		if(self.case_name not in self.run_list):
+			self.is_skipped=True
 #		self.file_turbostatlog = open(file_turbostatlog, "w")
 
 		self.do_run()
 
 	def result_parser(self, pattern, line_num=0):
+		if(self.is_skipped):
+			return
 		if line_num != 0:
 			stdout = self.output_std.splitlines()[line_num]
 		else:
@@ -84,7 +93,6 @@ class Case:
 			ret = re.search(pattern, stdout).group(1)
 		except:
 			ret = None
-
 			print(self.output_std)
 			print(pattern)
 			print(stdout)
@@ -92,6 +100,10 @@ class Case:
 		return ret
 
 	def do_run(self):
+		if(self.is_skipped):
+			print("[skipped]:", self.case_name)
+			return
+
 		if self.is_guest:
 			self.do_run_guest()
 		else:
@@ -226,7 +238,7 @@ def run_cases(is_guest):
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
 def main():
-	global g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest
+	global g_test_cases, g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest
 	g_log = open(g_logfile, "w")
 
 # Add global arguments!
@@ -241,6 +253,8 @@ def main():
 		help='Specify IP of host side, default is 100.115.92.25 which is default value of pixelbook')
 	parser.add_argument('-G', '--guest-ip', action="store", default="100.115.92.194", dest='ip_guest',
 		help='Specify IP of guest side, which is random, have to be given')
+	parser.add_argument('-t', '--test-case', action="append", type=str, nargs='?', default=[], dest='test_cases',
+		help='Specify test cases list')
 
 
 # Add sub-command and its arguments!
@@ -261,6 +275,10 @@ def main():
 	g_ip_host = args.ip_host
 	g_ip_guest = args.ip_guest
 
+	g_test_cases = args.test_cases
+
+	print(args)
+	#sys.exit(0)
 # Sanity Check
 	if not os.path.exists(g_directory):
 		os.makedirs(g_directory)
@@ -271,13 +289,10 @@ def main():
 	if g_bool_max_gpu:
 		subprocess.call(["./max_gpu.sh"], stdout=g_log, stderr=g_log)
 
-	print("cpu: %s, gpu: %s directory: %s" %(g_bool_max_cpu, g_bool_max_gpu, g_directory))
-	print("%s" %(args))
-
 # Run test cases, distinguish host and guest which given by command arguments
 	args.func()
 
-	print(g_results_list)
+	#print(g_results_list)
 	for key,value in g_results_list.items():
 		print('%s %s'%(key,value))
 
