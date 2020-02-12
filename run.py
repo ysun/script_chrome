@@ -32,7 +32,7 @@ g_bool_max_gpu=False
 def signal_handler(sig, frame):
 	print('Interruptted by user! (Ctrl+C)')
 
-	subprocess.run(['ssh %s pkill turbostat' %g_ip_host], shell=True)
+#	subprocess.run(['ssh %s pkill turbostat' %g_ip_host], shell=True)
 	sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -59,7 +59,10 @@ class Case:
 	output_std=""
 	run_list=[]
 	is_skipped=False
-	conn_server=None
+	conn_server_topcpu=None
+	conn_server_topgpu=None
+	conn_server_turbostat=None
+
 	proc_server_topcpu=None
 	proc_server_topgpu=None
 	proc_server_turbostat=None
@@ -80,13 +83,21 @@ class Case:
 		self.fd_topgpulog = open(self.file_topgpulog, "w")
 		self.fd_turbostatlog= open(self.file_turbostatlog, "w")
 
-		if(self.case_name not in self.run_list):
+		if((self.case_name not in self.run_list) and self.run_list != []):
 			self.is_skipped=True
 
 		if(self.is_guest):
-			self.conn_server = paramiko.SSHClient()
-			self.conn_server.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-			self.conn_server.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
+			self.conn_server_cpu = paramiko.SSHClient()
+			self.conn_server_cpu.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			self.conn_server_cpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
+
+			self.conn_server_gpu = paramiko.SSHClient()
+			self.conn_server_gpu.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			self.conn_server_gpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
+
+			self.conn_server_turbostat = paramiko.SSHClient()
+			self.conn_server_turbostat.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			self.conn_server_turbostat.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
 
 		self.do_run()
 
@@ -165,19 +176,19 @@ class Case:
 #		self.fd_turbostatlog.close()
 
 	def host_top_cpu(self):
-		stdin, stdout, stderr = self.conn_server.exec_command("top_cpu.sh")
+		stdin, stdout, stderr = self.conn_server_cpu.exec_command("top_cpu.sh")
 		list = stdout.readlines()
 		output = [line.rstrip() for line in list]
 		self.fd_topcpulog.write('\n'.join(output))
 
 	def host_top_gpu(self):
-		stdin, stdout, stderr = self.conn_server.exec_command("top_gpu.sh")
+		stdin, stdout, stderr = self.conn_server_gpu.exec_command("top_gpu.sh")
 		list = stdout.readlines()
 		output = [line.rstrip() for line in list]
 		self.fd_topgpulog.write('\n'.join(output))
 
 	def host_turbostat(self):
-		stdin, stdout, stderr = self.conn_server.exec_command("turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1")
+		stdin, stdout, stderr = self.conn_server_turbostat.exec_command("turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1")
 		list = stdout.readlines()
 		output = [line.rstrip() for line in list]
 		self.fd_turbostatlog.write('\n'.join(output))
@@ -219,17 +230,17 @@ class Case:
 		    self.fd_testlog.flush()
 
 		self.fd_testlog.close()
-#		p_turbostat.kill()
-#		p_topcpu.kill()
-#		p_topgpu.kill()
-		self.conn_server.close()
+		self.conn_server_cpu.close()
+		self.conn_server_gpu.close()
+		self.conn_server_turbostat.close()
+
 		self.proc_server_topcpu.join()
 		self.proc_server_topgpu.join()
 		self.proc_server_turbostat.join()
 
-		subprocess.run(['ssh %s pkill turbostat'%self.ip_host], shell=True)
-		subprocess.run(['ssh %s pkill top_cpu.sh'%self.ip_host], shell=True)
-		subprocess.run(['ssh %s pkill top_gpu.sh'%self.ip_host], shell=True)
+#		subprocess.run(['ssh %s pkill turbostat'%self.ip_host], shell=True)
+#		subprocess.run(['ssh %s pkill top_cpu.sh'%self.ip_host], shell=True)
+#		subprocess.run(['ssh %s pkill top_gpu.sh'%self.ip_host], shell=True)
 
 		print("[Done]")
 
@@ -268,16 +279,16 @@ def run_cases_guest():
 
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
-	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
+	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=20M -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=4 -name=fio_write"%g_directory, is_guest)
+	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=20M -numjobs=4 -name=fio_write"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=4 -name=fio_randread"%g_directory, is_guest)
+	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=20M -numjobs=4 -name=fio_randread"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
+	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=20M -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
 #	case = Case("apitrace-alu-2.trace", "apitrace replay /home/ikvmgt/gfxbench4/alu-2.trace", is_guest)
