@@ -19,7 +19,6 @@ UTF8 = 'utf-8'
 current_encoding = GBK
 
 g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
-g_logfile="./run.log"
 g_ip_guest=""
 g_ip_host="100.115.92.1"
 g_test_cases=[]
@@ -237,9 +236,10 @@ def run_cases(is_guest):
 	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
+#	case = Case("apitrace-alu-2.trace", "apitrace replay /home/ikvmgt/gfxbench4/alu-2.trace", is_guest)
+
 def main():
 	global g_test_cases, g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest
-	g_log = open(g_logfile, "w")
 
 # Add global arguments!
 	parser = argparse.ArgumentParser(description='This is a simple automated test framework for ChromeOS and Linux VM')
@@ -284,10 +284,10 @@ def main():
 		os.makedirs(g_directory)
 
 	if g_bool_max_cpu:
-		subprocess.call(["./max_cpu.sh"], stdout=g_log, stderr=g_log)
+		subprocess.call(["./max_cpu.sh"] )
 
 	if g_bool_max_gpu:
-		subprocess.call(["./max_gpu.sh"], stdout=g_log, stderr=g_log)
+		subprocess.call(["./max_gpu.sh"])
 
 # Run test cases, distinguish host and guest which given by command arguments
 	args.func()
