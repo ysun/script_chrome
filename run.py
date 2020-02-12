@@ -12,7 +12,8 @@ import re
 import socket
 
 import time
-
+import paramiko
+import threading
 
 GBK = 'gbk'
 UTF8 = 'utf-8'
@@ -20,7 +21,7 @@ current_encoding = GBK
 
 g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
 g_ip_guest=""
-g_ip_host="100.115.92.1"
+g_ip_host=""
 g_test_cases=[]
 
 g_results_list = dict()
@@ -58,6 +59,10 @@ class Case:
 	output_std=""
 	run_list=[]
 	is_skipped=False
+	conn_server=None
+	proc_server_topcpu=None
+	proc_server_topgpu=None
+	proc_server_turbostat=None
 
 	def __init__(self, case_name, bin_case, is_guest):
 		self.run_list=g_test_cases
@@ -73,10 +78,15 @@ class Case:
 		self.fd_testlog = open(self.file_testlog, "w")
 		self.fd_topcpulog = open(self.file_topcpulog, "w")
 		self.fd_topgpulog = open(self.file_topgpulog, "w")
+		self.fd_turbostatlog= open(self.file_turbostatlog, "w")
 
 		if(self.case_name not in self.run_list):
 			self.is_skipped=True
-#		self.file_turbostatlog = open(file_turbostatlog, "w")
+
+		if(self.is_guest):
+			self.conn_server = paramiko.SSHClient()
+			self.conn_server.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			self.conn_server.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
 
 		self.do_run()
 
@@ -154,11 +164,40 @@ class Case:
 		print("[Done]")
 #		self.fd_turbostatlog.close()
 
+	def host_top_cpu(self):
+		stdin, stdout, stderr = self.conn_server.exec_command("top_cpu.sh")
+		list = stdout.readlines()
+		output = [line.rstrip() for line in list]
+		self.fd_topcpulog.write('\n'.join(output))
+
+	def host_top_gpu(self):
+		stdin, stdout, stderr = self.conn_server.exec_command("top_gpu.sh")
+		list = stdout.readlines()
+		output = [line.rstrip() for line in list]
+		self.fd_topgpulog.write('\n'.join(output))
+
+	def host_turbostat(self):
+		stdin, stdout, stderr = self.conn_server.exec_command("turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1")
+		list = stdout.readlines()
+		output = [line.rstrip() for line in list]
+		self.fd_turbostatlog.write('\n'.join(output))
+
+
 	def do_run_guest(self):
 		subprocess.call(['ssh %s mkdir -p %s'%(self.ip_host, self.base_directory)], shell=True)
-		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(self.ip_host, self.file_turbostatlog)],shell=True)
-		p_topcpu = subprocess.Popen(['ssh %s top_cpu.sh'%self.ip_host], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
-		p_topgpu = subprocess.Popen(['ssh %s top_gpu.sh'%self.ip_host], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
+		self.proc_server_topcpu=threading.Thread(target=self.host_top_cpu, args=())
+		self.proc_server_topcpu.start()
+
+		self.proc_server_topgpu=threading.Thread(target=self.host_top_gpu, args=())
+		self.proc_server_topgpu.start()
+
+		self.proc_server_turbostat=threading.Thread(target=self.host_turbostat, args=())
+		self.proc_server_turbostat.start()
+
+		#self.host_top_cpu()
+#		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(self.ip_host, self.file_turbostatlog)],shell=True)
+#		p_topcpu = subprocess.Popen(['ssh %s top_cpu.sh'%self.ip_host], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
+#		p_topgpu = subprocess.Popen(['ssh %s top_gpu.sh'%self.ip_host], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
 			shell=True,
@@ -180,13 +219,18 @@ class Case:
 		    self.fd_testlog.flush()
 
 		self.fd_testlog.close()
-		p_turbostat.kill()
-		p_topcpu.kill()
-		p_topgpu.kill()
+#		p_turbostat.kill()
+#		p_topcpu.kill()
+#		p_topgpu.kill()
+		self.conn_server.close()
+		self.proc_server_topcpu.join()
+		self.proc_server_topgpu.join()
+		self.proc_server_turbostat.join()
 
 		subprocess.run(['ssh %s pkill turbostat'%self.ip_host], shell=True)
 		subprocess.run(['ssh %s pkill top_cpu.sh'%self.ip_host], shell=True)
 		subprocess.run(['ssh %s pkill top_gpu.sh'%self.ip_host], shell=True)
+
 		print("[Done]")
 
 def run_cases_host():
@@ -208,7 +252,7 @@ def run_cases_guest():
 	global g_ip_guest
 	print("here is guest")
 	if g_ip_guest == "":
-		g_ip_guest = [(s.connect(('100.115.92.1', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
+		g_ip_guest = [(s.connect(('100.115.92.25', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 
 	run_cases(True)
 
@@ -224,7 +268,7 @@ def run_cases_guest():
 
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
-	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=4 -name=fio_read"%g_directory, is_guest)
+	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
 	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=4 -name=fio_write"%g_directory, is_guest)
@@ -249,7 +293,7 @@ def main():
 		help='Online all CPU cores, only 2 out of 4 cores are enabled by default on Pixelbook; And force cpus running at highest freq!')
 	parser.add_argument('-g', '--max-gpu', action="store_true", default=False, dest='bool_max_gpu',
 		help='Force GPU running with highest freqency!')
-	parser.add_argument('-H', '--host-ip', action="store", default="100.115.92.1", dest='ip_host',
+	parser.add_argument('-H', '--host-ip', action="store", default="100.115.92.25", dest='ip_host',
 		help='Specify IP of host side, default is 100.115.92.25 which is default value of pixelbook')
 	parser.add_argument('-G', '--guest-ip', action="store", default="100.115.92.194", dest='ip_guest',
 		help='Specify IP of guest side, which is random, have to be given')
