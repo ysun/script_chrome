@@ -130,7 +130,7 @@ class Case:
 			self.do_run_host()
 
 	def do_run_host(self):
-		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%self.file_turbostatlog], shell=True)
+		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary -o %s'%self.file_turbostatlog], shell=True)
 		p_topcpu = subprocess.Popen(['./top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
 		p_topgpu = subprocess.Popen(['./top_gpu.sh'], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
 # Do not handle stdout/errout of turbostat
@@ -188,7 +188,7 @@ class Case:
 		self.fd_topgpulog.write('\n'.join(output))
 
 	def host_turbostat(self):
-		stdin, stdout, stderr = self.conn_server_turbostat.exec_command("turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1")
+		stdin, stdout, stderr = self.conn_server_turbostat.exec_command("turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary")
 		list = stdout.readlines()
 		output = [line.rstrip() for line in list]
 		self.fd_turbostatlog.write('\n'.join(output))
