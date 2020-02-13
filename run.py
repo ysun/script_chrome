@@ -171,7 +171,6 @@ class Case:
 
 
 	def do_run_guest(self):
-		subprocess.call(['ssh %s mkdir -p %s'%(self.ip_host, self.base_directory)], shell=True)
 		self.proc_server_topcpu=threading.Thread(target=self.host_top_cpu, args=())
 		self.proc_server_topcpu.start()
 
@@ -181,10 +180,6 @@ class Case:
 		self.proc_server_turbostat=threading.Thread(target=self.host_turbostat, args=())
 		self.proc_server_turbostat.start()
 
-		#self.host_top_cpu()
-#		p_turbostat = subprocess.Popen(['ssh %s turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 -o %s'%(self.ip_host, self.file_turbostatlog)],shell=True)
-#		p_topcpu = subprocess.Popen(['ssh %s top_cpu.sh'%self.ip_host], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
-#		p_topgpu = subprocess.Popen(['ssh %s top_gpu.sh'%self.ip_host], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
 			shell=True,
@@ -213,10 +208,6 @@ class Case:
 		self.proc_server_topcpu.join()
 		self.proc_server_topgpu.join()
 		self.proc_server_turbostat.join()
-
-#		subprocess.run(['ssh %s pkill turbostat'%self.ip_host], shell=True)
-#		subprocess.run(['ssh %s pkill top_cpu.sh'%self.ip_host], shell=True)
-#		subprocess.run(['ssh %s pkill top_gpu.sh'%self.ip_host], shell=True)
 
 		print("[Done]")
 
@@ -256,16 +247,16 @@ def run_cases_guest():
 
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
-	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=200M -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
+	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=200M -numjobs=4 -name=fio_write"%g_directory, is_guest)
+	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=2G -numjobs=4 -name=fio_write"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=200M -numjobs=4 -name=fio_randread"%g_directory, is_guest)
+	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=2G -numjobs=4 -name=fio_randread"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=200M -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
+	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
 #	case = Case("apitrace-alu-2.trace", "apitrace replay /home/ikvmgt/gfxbench4/alu-2.trace", is_guest)
