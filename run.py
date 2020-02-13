@@ -20,6 +20,7 @@ UTF8 = 'utf-8'
 current_encoding = GBK
 
 g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
+g_ip_current = [(s.connect(('100.115.92.25', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 g_ip_guest=""
 g_ip_host=""
 g_test_cases=[]
@@ -220,7 +221,9 @@ class Case:
 		print("[Done]")
 
 def run_cases_host():
-	global g_ip_guest
+	global g_ip_guest, g_ip_host, g_ip_current
+	g_ip_host = g_ip_current
+
 	print("Running test cases as a host")
 	run_cases(False)
 
@@ -235,11 +238,10 @@ def run_cases_host():
 	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
 def run_cases_guest():
-	global g_ip_guest
-	print("Running test cases as a guest")
-	if g_ip_guest == "":
-		g_ip_guest = [(s.connect(('100.115.92.25', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
+	global g_ip_guest, g_ip_host, g_ip_current
+	g_ip_guest = g_ip_current
 
+	print("Running test cases as a guest")
 	run_cases(True)
 
 # For guest specified test case, create here
