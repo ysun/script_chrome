@@ -95,15 +95,15 @@ class Case:
 		if(self.is_guest):
 			self.conn_server_cpu = paramiko.SSHClient()
 			self.conn_server_cpu.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-			self.conn_server_cpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
+			self.conn_server_cpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
 
 			self.conn_server_gpu = paramiko.SSHClient()
 			self.conn_server_gpu.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-			self.conn_server_gpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
+			self.conn_server_gpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
 
 			self.conn_server_turbostat = paramiko.SSHClient()
 			self.conn_server_turbostat.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-			self.conn_server_turbostat.connect(g_ip_host, 22, username='root', password='test0000', timeout=2)
+			self.conn_server_turbostat.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
 
 		self.do_run()
 
