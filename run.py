@@ -130,50 +130,25 @@ class Case:
 			self.do_run_host()
 
 	def do_run_host(self):
-		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary -o %s'%self.file_turbostatlog], shell=True)
+		#p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary -o %s'%self.file_turbostatlog], shell=True)
+		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary'],
+			shell=True, stdout=self.fd_turbostatlog, stderr=self.fd_turbostatlog)
 		p_topcpu = subprocess.Popen(['./top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
 		p_topgpu = subprocess.Popen(['./top_gpu.sh'], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
-# Do not handle stdout/errout of turbostat
-# Use its output augument instead.
-#			stdout = subprocess.PIPE,
-#			stderr = subprocess.PIPE,
-#			bufsize=1)
-		
+
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
 			shell=True,
-			stdout = subprocess.PIPE,
-			stderr = subprocess.PIPE,
+			stdout = self.fd_testlog,
+			stderr = self.fd_testlog,
 			bufsize=0)
 		
-		while p_test.poll() is None:
-			std_out = p_test.stdout.read().decode(current_encoding)
-			self.output_std = std_out
+		p_test.wait()
 
-			self.fd_testlog.write(std_out)
-#		    sys.stdout.write(std_out)
-			self.fd_testlog.flush()
-
-		
-# Do not handle stdout/errout of turbostat
-# Use its output augument instead.
-#		    r = p_turbostat.stdout.readline().decode(current_encoding)
-#		    self.fd_turbostatlog.write(r)
-#		    self.fd_turbostatlog.flush()
-#		    sys.stdout.write(r)
-
-		if p_test.poll() != 0: 
-			err = p_test.stderr.read().decode(current_encoding)
-			sys.stdout.write(err)
-			self.fd_testlog.write(err)
-			self.fd_testlog.flush()
-		
-		self.fd_testlog.close()
-		p_turbostat.kill()
-		p_topcpu.kill()
 		p_topgpu.kill()
+		p_topcpu.kill()
+		p_turbostat.kill()
 		print("[Done]")
-#		self.fd_turbostatlog.close()
 
 	def host_top_cpu(self):
 		stdin, stdout, stderr = self.conn_server_cpu.exec_command("top_cpu.sh")
@@ -246,7 +221,7 @@ class Case:
 
 def run_cases_host():
 	global g_ip_guest
-	print("here is host")
+	print("Running test cases as a host")
 	run_cases(False)
 
 # For host specified test case, create here
@@ -261,7 +236,7 @@ def run_cases_host():
 
 def run_cases_guest():
 	global g_ip_guest
-	print("here is guest")
+	print("Running test cases as a guest")
 	if g_ip_guest == "":
 		g_ip_guest = [(s.connect(('100.115.92.25', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 
@@ -279,16 +254,16 @@ def run_cases_guest():
 
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
-	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=20M -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
+	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=200M -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=20M -numjobs=4 -name=fio_write"%g_directory, is_guest)
+	case = Case("fio-write", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=write -ioengine=libaio -size=200M -numjobs=4 -name=fio_write"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=20M -numjobs=4 -name=fio_randread"%g_directory, is_guest)
+	case = Case("fio-randread", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randread -ioengine=libaio -size=200M -numjobs=4 -name=fio_randread"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
 
-	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=20M -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
+	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=200M -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
 #	case = Case("apitrace-alu-2.trace", "apitrace replay /home/ikvmgt/gfxbench4/alu-2.trace", is_guest)
