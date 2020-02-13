@@ -14,16 +14,18 @@ import socket
 import time
 import paramiko
 import threading
+import time
 
 GBK = 'gbk'
 UTF8 = 'utf-8'
 current_encoding = GBK
 
 g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
-g_ip_current = [(s.connect(('100.115.92.25', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
+g_ip_current = [(s.connect(('8.8.8.8', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 g_ip_guest=""
 g_ip_host=""
 g_test_cases=[]
+g_case_pattern='TEMPLATE'
 
 g_results_list = dict()
 
@@ -59,6 +61,7 @@ class Case:
 
 	output_std=""
 	run_list=[]
+	case_pattern=''
 	is_skipped=False
 	conn_server_topcpu=None
 	conn_server_topgpu=None
@@ -70,6 +73,7 @@ class Case:
 
 	def __init__(self, case_name, bin_case, is_guest):
 		self.run_list=g_test_cases
+		self.case_pattern=g_case_pattern
 		self.case_name = case_name
 		self.bin_case = bin_case
 		self.file_testlog = "%s/%s.log"%(self.base_directory, case_name)
@@ -84,7 +88,8 @@ class Case:
 		self.fd_topgpulog = open(self.file_topgpulog, "w")
 		self.fd_turbostatlog= open(self.file_turbostatlog, "w")
 
-		if((self.case_name not in self.run_list) and self.run_list != []):
+		found_case = re.search(self.case_pattern, self.case_name)
+		if(((self.case_name not in self.run_list) and self.run_list != []) or (not found_case and self.case_pattern != '')):
 			self.is_skipped=True
 
 		if(self.is_guest):
@@ -209,6 +214,7 @@ class Case:
 		self.proc_server_topgpu.join()
 		self.proc_server_turbostat.join()
 
+		time.sleep(1)
 		print("[Done]")
 
 def run_cases_host():
@@ -259,10 +265,19 @@ def run_cases(is_guest):
 	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-#	case = Case("apitrace-alu-2.trace", "apitrace replay /home/ikvmgt/gfxbench4/alu-2.trace", is_guest)
+	gfxbench4_list=[
+		'alu-2.trace', 'manhattan-3.1.1-1440p-offscreen.trace', 'tessellation-1080p-offscreen.trace',
+		'car-chase-1080p-offscreen.trace', 'manhattan-3.1.trace', 'tessellation.trace',
+		'car-chase.trace', 'manhattan.trace', 'texturing.trace',
+		'driver-overhead-2.trace','render_quality_high.trace','t-rex.trace',
+		'manhattan-3.1-1080p-offscreen.trace', 'render_quality.trace'
+		]
+	for game in gfxbench4_list:
+		case = Case(game, "apitrace replay ./gfxbench4/%s"%game, is_guest)
+		g_results_list[case.case_name] = case.result_parser(r'.* (\S*) fps', 0)
 
 def main():
-	global g_test_cases, g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest
+	global g_test_cases, g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest, g_case_pattern
 
 # Add global arguments!
 	parser = argparse.ArgumentParser(description='This is a simple automated test framework for ChromeOS and Linux VM')
@@ -278,7 +293,8 @@ def main():
 		help='Specify IP of guest side, which is random, have to be given')
 	parser.add_argument('-t', '--test-case', action="append", type=str, nargs='?', default=[], dest='test_cases',
 		help='Specify test cases list')
-
+	parser.add_argument('-p', '--case-pattern', action="store", type=str, default='', dest='case_pattern',
+		help='Specify test cases pattern string')
 
 # Add sub-command and its arguments!
 	subparsers = parser.add_subparsers()
@@ -299,6 +315,7 @@ def main():
 	g_ip_guest = args.ip_guest
 
 	g_test_cases = args.test_cases
+	g_case_pattern= args.case_pattern
 
 	print(args)
 	#sys.exit(0)
