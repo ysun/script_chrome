@@ -28,6 +28,8 @@ g_test_cases=[]
 g_case_pattern='TEMPLATE'
 
 g_results_list = dict()
+g_file_results = "%s/summary.log"%g_directory
+g_fd_results = None
 
 g_bool_max_cpu=False
 g_bool_max_gpu=False
@@ -83,7 +85,7 @@ class Case:
 
 		self.is_guest = is_guest
 
-		self.fd_testlog = open(self.file_testlog, "w")
+		self.fd_testlog = open(self.file_testlog, "w+")
 		self.fd_topcpulog = open(self.file_topcpulog, "w")
 		self.fd_topgpulog = open(self.file_topgpulog, "w")
 		self.fd_turbostatlog= open(self.file_turbostatlog, "w")
@@ -110,19 +112,18 @@ class Case:
 	def result_parser(self, pattern, line_num=0):
 		if(self.is_skipped):
 			return
-		if line_num != 0:
-			stdout = self.output_std.splitlines()[line_num]
-		else:
-			stdout = self.output_std
 
+		self.fd_testlog.seek(0)
+		stdout = self.fd_testlog.read()
+
+		if line_num != 0:
+			stdout = stdout.splitlines()[line_num]
 		try:
 			ret = re.search(pattern, stdout).group(1)
 			print("result: %s" %ret)
 		except:
 			ret = None
-			print(self.output_std)
 			print(pattern)
-			print(stdout)
 
 		return ret
 
@@ -208,7 +209,6 @@ class Case:
 #		    self.fd_testlog.write(err)
 #		    self.fd_testlog.flush()
 
-		self.fd_testlog.close()
 		self.conn_server_cpu.close()
 		self.conn_server_gpu.close()
 		self.conn_server_turbostat.close()
@@ -335,9 +335,13 @@ def main():
 	args.func()
 
 	#print(g_results_list)
+	g_fd_results = open(g_file_results, 'w')
+
 	for key,value in g_results_list.items():
 		print('%s %s'%(key,value))
+		g_fd_results.write('%s: %s\n'%(key,value))
 
+	g_fd_results.close()
 
 if __name__ == "__main__":
     main()
