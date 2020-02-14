@@ -68,10 +68,12 @@ class Case:
 	conn_server_topcpu=None
 	conn_server_topgpu=None
 	conn_server_turbostat=None
+	conn_server_prepare=None
 
 	proc_server_topcpu=None
 	proc_server_topgpu=None
 	proc_server_turbostat=None
+	proc_server_prepare=None
 
 	def __init__(self, case_name, bin_case, is_guest):
 		self.run_list=g_test_cases
@@ -95,6 +97,10 @@ class Case:
 			self.is_skipped=True
 
 		if(self.is_guest):
+			self.conn_server_prepare = paramiko.SSHClient()
+			self.conn_server_prepare.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			self.conn_server_prepare.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
+
 			self.conn_server_cpu = paramiko.SSHClient()
 			self.conn_server_cpu.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 			self.conn_server_cpu.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
@@ -143,6 +149,7 @@ class Case:
 			shell=True, stdout=self.fd_turbostatlog, stderr=self.fd_turbostatlog)
 		p_topcpu = subprocess.Popen(['./top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
 		p_topgpu = subprocess.Popen(['./top_gpu.sh'], shell=True, stdout=self.fd_topgpulog, stderr=self.fd_topgpulog)
+		p_dropcache = subprocess.Popen(['echo 3 > /proc/sys/vm/drop_caches'], shell=True)
 
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
@@ -176,8 +183,16 @@ class Case:
 		output = [line.rstrip() for line in list]
 		self.fd_turbostatlog.write('\n'.join(output))
 
+	def host_prepare(self):
+		stdin, stdout, stderr = self.conn_server_prepare.exec_command("echo 3 > /proc/sys/vm/drop_caches")
+		list = stdout.readlines()
+		output = [line.rstrip() for line in list]
 
 	def do_run_guest(self):
+		self.proc_server_prepare=threading.Thread(target=self.host_prepare, args=())
+		self.proc_server_prepare.start()
+		self.proc_server_prepare.join()
+
 		self.proc_server_topcpu=threading.Thread(target=self.host_top_cpu, args=())
 		self.proc_server_topcpu.start()
 
@@ -209,6 +224,7 @@ class Case:
 #		    self.fd_testlog.write(err)
 #		    self.fd_testlog.flush()
 
+		self.conn_server_prepare.close()
 		self.conn_server_cpu.close()
 		self.conn_server_gpu.close()
 		self.conn_server_turbostat.close()
