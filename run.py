@@ -122,14 +122,15 @@ class Case:
 		self.fd_testlog.seek(0)
 		stdout = self.fd_testlog.read()
 
-		if line_num != 0:
-			stdout = stdout.splitlines()[line_num]
 		try:
+			if line_num != 0:
+				stdout = stdout.splitlines()[line_num]
+
 			ret = re.search(pattern, stdout).group(1)
 			print("result: %s" %ret)
 		except:
 			ret = None
-			print(pattern)
+			print("[Warn]:%s No output, or result pattern missing match!!"%self.case_name)
 
 		return ret
 
