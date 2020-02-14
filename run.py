@@ -189,22 +189,24 @@ class Case:
 		print("[Running]: %s"%self.bin_case)
 		p_test = subprocess.Popen([self.bin_case],
 			shell=True,
-			stdout = subprocess.PIPE,
-			stderr = subprocess.PIPE,
+			stdout = self.fd_testlog,
+			stderr = self.fd_testlog,
 			bufsize=0)
 
-		while p_test.poll() is None:
-		    std_out = p_test.stdout.read().decode(current_encoding)
-		    self.output_std = std_out
+		p_test.wait()
 
-		    self.fd_testlog.write(std_out)
-		    self.fd_testlog.flush()
-
-		if p_test.poll() != 0:
-		    err = p_test.stderr.read().decode(current_encoding)
-		    sys.stdout.write(err)
-		    self.fd_testlog.write(err)
-		    self.fd_testlog.flush()
+#		while p_test.poll() is None:
+#		    std_out = p_test.stdout.read().decode(current_encoding)
+#		    self.output_std = std_out
+#
+#		    self.fd_testlog.write(std_out)
+#		    self.fd_testlog.flush()
+#
+#		if p_test.poll() != 0:
+#		    err = p_test.stderr.read().decode(current_encoding)
+#		    sys.stdout.write(err)
+#		    self.fd_testlog.write(err)
+#		    self.fd_testlog.flush()
 
 		self.fd_testlog.close()
 		self.conn_server_cpu.close()
@@ -273,7 +275,7 @@ def run_cases(is_guest):
 		'driver-overhead-2.trace','t-rex.trace' #'render_quality_high.trace','render_quality.trace'
 		]
 	for game in gfxbench4_list:
-		case = Case(game, "apitrace replay ./gfxbench4/%s"%game, is_guest)
+		case = Case(game, "apitrace replay ./gfxbench4/%s 2>/dev/null"%game, is_guest)
 		g_results_list[case.case_name] = case.result_parser(r'.* (\S*) fps', 0)
 
 def main():
