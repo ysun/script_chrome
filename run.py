@@ -117,6 +117,7 @@ class Case:
 
 		try:
 			ret = re.search(pattern, stdout).group(1)
+			print("result: %s" %ret)
 		except:
 			ret = None
 			print(self.output_std)
@@ -266,11 +267,10 @@ def run_cases(is_guest):
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
 	gfxbench4_list=[
-		'alu-2.trace', 'manhattan-3.1.1-1440p-offscreen.trace', 'tessellation-1080p-offscreen.trace',
-		'car-chase-1080p-offscreen.trace', 'manhattan-3.1.trace', 'tessellation.trace',
-		'car-chase.trace', 'manhattan.trace', 'texturing.trace',
-		'driver-overhead-2.trace','render_quality_high.trace','t-rex.trace',
-		'manhattan-3.1-1080p-offscreen.trace', 'render_quality.trace'
+		'alu-2.trace', 'manhattan-3.1.1-1440p-offscreen.trace', #'tessellation-1080p-offscreen.trace',
+		'manhattan-3.1.trace', 'tessellation.trace',#'car-chase-1080p-offscreen.trace','car-chase.trace', 
+		'manhattan.trace', 'texturing.trace',#'manhattan-3.1-1080p-offscreen.trace',
+		'driver-overhead-2.trace','t-rex.trace' #'render_quality_high.trace','render_quality.trace'
 		]
 	for game in gfxbench4_list:
 		case = Case(game, "apitrace replay ./gfxbench4/%s"%game, is_guest)
