@@ -124,7 +124,7 @@ class Case:
 
 		try:
 			if line_num != 0:
-				stdout = stdout.splitlines()[line_num]
+				stdout = stdout.splitlines()[line_num].strip()
 
 			ret = re.search(pattern, stdout).group(1)
 			print("result: %s" %ret)
@@ -252,7 +252,7 @@ def run_cases_host():
 	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
 
 	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 60"%g_ip_guest, False)
-	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
+	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +\S* +(\S*)', 6)
 
 def run_cases_guest():
 	global g_ip_guest, g_ip_host, g_ip_current
