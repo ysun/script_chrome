@@ -3,6 +3,7 @@
 set -e
 
 mount -o remount,exec /mnt/stateful_partition/
+mount -o remount,rw /
 echo "Remount /mnt/stateful_partition as executable"
 
 iptables -F
