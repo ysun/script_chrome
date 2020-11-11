@@ -28,7 +28,7 @@ g_test_cases=[]
 g_case_pattern='TEMPLATE'
 
 g_results_list = dict()
-g_file_results = "%s/summary.log"%g_directory
+g_file_results = "%s/result.csv"%g_directory
 g_fd_results = None
 
 g_bool_max_cpu=False
@@ -81,9 +81,9 @@ class Case:
 		self.case_name = case_name
 		self.bin_case = bin_case
 		self.file_testlog = "%s/%s.log"%(self.base_directory, case_name)
-		self.file_turbostatlog = "%s/%s_turbostat.log"%(self.base_directory, case_name)
-		self.file_topcpulog = "%s/%s_topcpu.log"%(self.base_directory, case_name)
-		self.file_topgpulog = "%s/%s_topgpu.log"%(self.base_directory, case_name)
+		self.file_turbostatlog = "%s/%s.turbostat"%(self.base_directory, case_name)
+		self.file_topcpulog = "%s/%s.cpu"%(self.base_directory, case_name)
+		self.file_topgpulog = "%s/%s.gpu"%(self.base_directory, case_name)
 
 		self.is_guest = is_guest
 
@@ -354,9 +354,10 @@ def main():
 	#print(g_results_list)
 	g_fd_results = open(g_file_results, 'w')
 
+	g_fd_results.write('caseName, caseResult\n')
 	for key,value in g_results_list.items():
 		print('%s %s'%(key,value))
-		g_fd_results.write('%s: %s\n'%(key,value))
+		g_fd_results.write('%s, %s\n'%(key,value))
 
 	g_fd_results.close()
 
