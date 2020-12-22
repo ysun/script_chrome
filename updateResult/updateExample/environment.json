@@ -1,0 +1,11 @@
+{
+"projectName":"newChromeOS",
+"hardware":"  TGL1  ",
+"type":"host",
+"environment":{"os": "chromeOS", "kernel": "sha1", "crosvm": "sha1", "url": "http://asfasdf","test":"test"},
+"class":"weekly",
+"week":202002,
+"date":"2020-11-02",
+"onDemand":"2020_type1_11-2",
+"detailType":["cpu","turbostat"]
+}

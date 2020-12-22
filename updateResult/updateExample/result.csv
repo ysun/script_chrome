@@ -1,0 +1,16 @@
+caseName,caseResult
+alu-2.trace,456
+driver-overhead-2.trace,123
+fio-randread,789
+fio-randwrite,256
+fio-read,156
+fio-write,786
+manhattan.trace,123
+manhattan-3.1.1-1440p-offscreen.trace,456
+manhattan-3.1.trace,423
+netperf-rr,159
+netperf-tcp_stream,439
+tessellation.trace,753
+texturing.trace,159
+add_three,456
+add_one,89
