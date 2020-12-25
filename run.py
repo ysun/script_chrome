@@ -2,19 +2,16 @@
 
 import subprocess
 import sys,os
-import getopt, sys
-
+import getopt
 import argparse
- 
 import signal
 import re
-
 import socket
-
 import time
-import paramiko
 import threading
-import time
+
+import paramiko
+
 
 GBK = 'gbk'
 UTF8 = 'utf-8'
@@ -96,7 +93,7 @@ class Case:
 		if(((self.case_name not in self.run_list) and self.run_list != []) or (not found_case and self.case_pattern != '')):
 			self.is_skipped=True
 
-		if(self.is_guest):
+		if self.is_guest == "guest":
 			self.conn_server_prepare = paramiko.SSHClient()
 			self.conn_server_prepare.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 			self.conn_server_prepare.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
@@ -112,40 +109,77 @@ class Case:
 			self.conn_server_turbostat = paramiko.SSHClient()
 			self.conn_server_turbostat.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 			self.conn_server_turbostat.connect(g_ip_host, 22, username='root', password='test0000', timeout=3)
-
+		elif self.is_guest == "chroot":
+			self.conn_server_prepare = paramiko.SSHClient()
+			self.conn_server_prepare.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			self.conn_server_prepare.connect(g_ip_chroot, 22, username='root', password='test0000', timeout=3)
+		
 		self.do_run()
 
 	def result_parser(self, pattern, line_num=0):
 		if(self.is_skipped):
 			return
-
 		self.fd_testlog.seek(0)
 		stdout = self.fd_testlog.read()
-
+		stdout_list = stdout.splitlines()
+		ret_list = []
 		try:
-			if line_num != 0:
-				stdout = stdout.splitlines()[line_num].strip()
-
-			ret = re.search(pattern, stdout).group(1)
-			print("result: %s" %ret)
+			if isinstance(line_num, list):
+				for i in line_num:
+					ret = re.search(pattern, stdout_list[i].strip()).group()
+					ret_list.append(ret)
+				print(ret_list)
+				return ret_list
+			elif line_num != 0:
+				ret = re.search(pattern, stdout_list[line_num].strip()).group()
+				print("result: %s" %ret)
+				return ret
+			else:
+				# Not based on the number of rows
+				ret = re.search(pattern, stdout).group(1)
+				print("result: %s" %ret)
+				return ret
 		except:
 			ret = None
 			print("[Warn]:%s No output, or result pattern missing match!!"%self.case_name)
-
-		return ret
-
+			return ret
+	
 	def do_run(self):
 		if(self.is_skipped):
 			print("[skipped]:", self.case_name)
 			return
-
-		if self.is_guest:
+		if self.is_guest == "guest":
 			self.do_run_guest()
+		elif self.is_guest == "chroot":
+			self.do_run_chroot()
+		elif self.is_guest == "android":
+			self.do_run_android()
 		else:
 			self.do_run_host()
+			
+	def do_run_android(self):
+		print("[Running]: %s"%self.bin_case)
+		p_test = subprocess.Popen([self.bin_case],
+			shell=True,
+			stdout = self.fd_testlog,
+			stderr = self.fd_testlog,
+			bufsize=0)
+		p_test.wait()
+		time.sleep(1)
+		print("[Done]")
+
+	def do_run_chroot(self):
+		print("[Running]: %s"%self.bin_case)
+		p_test = subprocess.Popen([self.bin_case],
+			shell=True,
+			stdout = self.fd_testlog,
+			stderr = self.fd_testlog,
+			bufsize=0)
+		p_test.wait()
+		time.sleep(1)
+		print("[Done]")
 
 	def do_run_host(self):
-		#p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary -o %s'%self.file_turbostatlog], shell=True)
 		p_turbostat = subprocess.Popen(['turbostat -s PkgWatt,CorWatt,GFXWatt,RAMWatt -q -i 1 --Summary'],
 			shell=True, stdout=self.fd_turbostatlog, stderr=self.fd_turbostatlog)
 		p_topcpu = subprocess.Popen(['./top_cpu.sh'], shell=True, stdout=self.fd_topcpulog, stderr=self.fd_topcpulog)
@@ -158,7 +192,6 @@ class Case:
 			stdout = self.fd_testlog,
 			stderr = self.fd_testlog,
 			bufsize=0)
-		
 		p_test.wait()
 
 		p_topgpu.kill()
@@ -209,68 +242,117 @@ class Case:
 			stdout = self.fd_testlog,
 			stderr = self.fd_testlog,
 			bufsize=0)
-
 		p_test.wait()
-
-#		while p_test.poll() is None:
-#		    std_out = p_test.stdout.read().decode(current_encoding)
-#		    self.output_std = std_out
-#
-#		    self.fd_testlog.write(std_out)
-#		    self.fd_testlog.flush()
-#
-#		if p_test.poll() != 0:
-#		    err = p_test.stderr.read().decode(current_encoding)
-#		    sys.stdout.write(err)
-#		    self.fd_testlog.write(err)
-#		    self.fd_testlog.flush()
-
 		self.conn_server_prepare.close()
 		self.conn_server_cpu.close()
 		self.conn_server_gpu.close()
 		self.conn_server_turbostat.close()
-
 		self.proc_server_topcpu.join()
 		self.proc_server_topgpu.join()
 		self.proc_server_turbostat.join()
-
 		time.sleep(1)
 		print("[Done]")
 
 def run_cases_host():
-	global g_ip_guest, g_ip_host, g_ip_current
-	g_ip_host = g_ip_current
-
 	print("Running test cases as a host")
-	run_cases(False)
+	run_cases("host")
+	# For host specified test case, create here
+	case = Case("stream", "/mnt/stateful_partition/stream/stream", "host")
+	g_results_list[case.case_name + "_Copy"] = case.result_parser(r"[0-9]*\.[0-9]+", 19)
+	g_results_list[case.case_name + "_Scale"] = case.result_parser(r"[0-9]*\.[0-9]+", 20)
+	g_results_list[case.case_name + "_Add"] = case.result_parser(r"[0-9]*\.[0-9]+", 21)
+	g_results_list[case.case_name + "_Triad"] = case.result_parser(r"[0-9]*\.[0-9]+", 22)
+	
+	case = Case("geekbench", "su chronos --command='/mnt/stateful_partition/data/local/tmp/geekbench_x86_64 --cpu --no-upload'", "host")
+	g_results_list[case.case_name + "_Single-Core-Score"] = case.result_parser(r"\d.*", 69)
+	g_results_list[case.case_name + "_Multi-Core-Score"] = case.result_parser(r"\d.*", 73)
 
-# For host specified test case, create here
-	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_guest, False)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 7)
+	case = Case("iperf3", "iperf3 -c 192.168.3.7 -t 60 -i 60", "host")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{3,}', 7)
 
-	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_guest, False)
-	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
+	case = Case("netperf-tcp_stream", "netperf -H 192.168.3.7 -t tcp_stream -l 60", "host")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{3,}\.[0-9]+', 6)
 
-	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 60"%g_ip_guest, False)
-	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +\S* +(\S*)', 6)
+	case = Case("netperf-rr", "netperf -H 192.168.3.7 -t tcp_rr -l 60", "host")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{3,}\.[0-9]+', 6)
+	
+	case = Case("kernelCompilation", "time make -- =/mnt/statefule_partation/linux/ -j4", "host")
+	g_results_list[case.case_name + "_user"] = case.result_parser(r'^[0-9]+\.[0-9]+', -2)
+	g_results_list[case.case_name + "_system"] = case.result_parser(r' [0-9]+\.[0-9]+', -2)
 
 def run_cases_guest():
-	global g_ip_guest, g_ip_host, g_ip_current
-	g_ip_guest = g_ip_current
-
 	print("Running test cases as a guest")
-	run_cases(True)
+	# run_cases("guest")
+	# For guest specified test case, create here
+	case = Case("kernelCompilation", "time make --directory=/home/ikvmgt/linux/ -j4", "guest")
+	g_results_list[case.case_name + "_user"] = case.result_parser(r'^[0-9]+\.[0-9]+', -2)
+	g_results_list[case.case_name + "_system"] = case.result_parser(r' [0-9]+\.[0-9]+', -2).strip()
+	
+	gfxbench4_list=[
+	'car-chase.trace',
+	'manhattan.trace', 
+	't-rex.trace',
+	]
+	for game in gfxbench4_list:
+		case = Case(game, "su ikvmgt -c 'glretrace /home/ikvmgt/gfxbench4/%s'"%game, "guest")
+		g_results_list[case.case_name] = case.result_parser(r'([0-9]+\.[0-9]+) fps', 0)
 
-# For guest specified test case, create here
-	case = Case("iperf3", "iperf3 -c %s -t 60 -i 60"%g_ip_host, True)
-	g_results_list[case.case_name] = case.result_parser(r'.* (\S*) Gbits/sec.*receiver', 7)
+	case = Case("nexuiz", "su ikvmgt -c 'nexuiz -benchmark demos/demo1 -nosound'", "guest")
+	g_results_list[case.case_name] = case.result_parser(r"[0-9]{2}[.][0-9]{7}", -1)
+	
+	case = Case("openarena", "su ikvmgt -c 'openarena +exec anholt'", "guest")
+	g_results_list[case.case_name] = case.result_parser(r"[0-9]{2,}\.+[0-9]+", -11)
 
-	case = Case("netperf-tcp_stream", "netperf -H %s -t tcp_stream -l 60"%g_ip_host, True)
-	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
+	case = Case("glmark2", "su ikvmgt -c 'glmark2'", "guest")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{2,}\.?[0-9]?', 42)
 
-	case = Case("netperf-rr", "netperf -H %s -t tcp_rr -l 20"%g_ip_host, True)
-	g_results_list[case.case_name] = case.result_parser(r'\S* +\S* +\S* +\S* +(\S*)', 6)
+	case = Case("geekbench", "su ikvmgt -c '/data/local/tmp/geekbench_x86_64 --cpu --no-upload'", "guest")
+	g_results_list[case.case_name + "_Single-Core-Score"] = case.result_parser(r"\d.*", 69)
+	g_results_list[case.case_name + "_Multi-Core-Score"] = case.result_parser(r"\d.*", 73)
 
+	case = Case("stream", "/home/ikvmgt/stream/stream", "guest")
+	g_results_list[case.case_name + "_Copy"] = case.result_parser(r"[0-9]*\.[0-9]+", 19)
+	g_results_list[case.case_name + "_Scale"] = case.result_parser(r"[0-9]*\.[0-9]+", 20)
+	g_results_list[case.case_name + "_Add"] = case.result_parser(r"[0-9]*\.[0-9]+", 21)
+	g_results_list[case.case_name + "_Triad"] = case.result_parser(r"[0-9]*\.[0-9]+", 22)
+
+	case = Case("iperf3", "iperf3 -c 192.168.3.7 -t 60 -i 60", "guest")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{3,}', 7)
+
+	case = Case("netperf-tcp_stream", "netperf -H 192.168.3.7 -t tcp_stream -l 60", "guest")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{3,}\.[0-9]+', 6)
+
+	case = Case("netperf-rr", "netperf -H 192.168.3.7 -t tcp_rr -l 60", "guest")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{3,}\.[0-9]+', 6)
+	
+def run_cases_android(): 
+	print("Running test cases as a androidVM")
+	# For androidVm specified test case, create here
+	case = Case("android_geekbench", "adb shell /data/local/tmp/geekbench_x86_64 --no-upload --cpu", "android")
+	g_results_list[case.case_name + "_Single-Core-Score"] = case.result_parser(r"\d.*", 69)
+	g_results_list[case.case_name + "_Multi-Core-Score"] = case.result_parser(r"\d.*", 73)
+	
+def run_cases_chroot():
+	print("Running test cases as a chroot")
+	# For chroot specified test case, create here
+	case = Case("nexuiz", "su intel -c 'nexuiz -benchmark demos/demo1 -nosound'", "guest")
+	g_results_list[case.case_name] = case.result_parser(r"([0-9]+\.[0-9]+) fps", 0)
+	
+	case = Case("openarena", "su intel -c 'openarena +exec anholt'", "guest")
+	g_results_list[case.case_name] = case.result_parser(r"([0-9]+\.[0-9]+) fps", 0)
+	
+	gfxbench4_list=[
+	'car-chase.trace',
+	'manhattan.trace', 
+	't-rex.trace',
+	]
+	for game in gfxbench4_list:
+		case = Case(game, "su intel -c 'glretrace /home/intel/gfxbench4/%s'"%game, "guest")
+		g_results_list[case.case_name] = case.result_parser(r'([0-9]+\.[0-9]+) fps', 0)
+	
+	case = Case("glmark2", "su intel -c 'glmark2'", "guest")
+	g_results_list[case.case_name] = case.result_parser(r'[0-9]{2,}\.?[0-9]?', 42)
+	
 def run_cases(is_guest):
 	######## Add test cases here! For common test cases #############
 	case = Case("fio-read", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=read -ioengine=libaio -size=2G -numjobs=4 -name=fio_read && rm -rf %s/test_file"%(g_directory,g_directory), is_guest)
@@ -285,20 +367,10 @@ def run_cases(is_guest):
 	case = Case("fio-randwrite", "fio -filename=%s/test_file -direct=1 -iodepth 256 -rw=randwrite -ioengine=libaio -size=2G -numjobs=4 -name=fio_randwrite"%g_directory, is_guest)
 	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
 
-	gfxbench4_list=[
-		'alu-2.trace', 'manhattan-3.1.1-1440p-offscreen.trace', #'tessellation-1080p-offscreen.trace',
-		'manhattan-3.1.trace', 'tessellation.trace',#'car-chase-1080p-offscreen.trace','car-chase.trace', 
-		'manhattan.trace', 'texturing.trace',#'manhattan-3.1-1080p-offscreen.trace',
-		'driver-overhead-2.trace','t-rex.trace' #'render_quality_high.trace','render_quality.trace'
-		]
-	for game in gfxbench4_list:
-		case = Case(game, "apitrace replay ./gfxbench4/%s 2>/dev/null"%game, is_guest)
-		g_results_list[case.case_name] = case.result_parser(r'.* (\S*) fps', 0)
-
 def main():
-	global g_test_cases, g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest, g_case_pattern
+	global g_directory, g_bool_max_cpu, g_bool_max_gpu, g_ip_host, g_ip_guest, g_ip_chroot, g_case_pattern, g_test_cases
 
-# Add global arguments!
+	# Add global arguments!
 	parser = argparse.ArgumentParser(description='This is a simple automated test framework for ChromeOS and Linux VM')
 	parser.add_argument('-d','--directory',
 		help='The directory for saving results and logs. Default is /mnt/statefule_partation/<current_dateime>')
@@ -310,37 +382,45 @@ def main():
 		help='Specify IP of host side, default is 100.115.92.25 which is default value of pixelbook')
 	parser.add_argument('-G', '--guest-ip', action="store", default="100.115.92.194", dest='ip_guest',
 		help='Specify IP of guest side, which is random, have to be given')
+	parser.add_argument('-C', '--chroot-ip', action="store", default="100.115.92.194", dest='ip_chroot',
+		help='Specify IP of chroot side, which is random, have to be given')
 	parser.add_argument('-t', '--test-case', action="append", type=str, nargs='?', default=[], dest='test_cases',
 		help='Specify test cases list')
 	parser.add_argument('-p', '--case-pattern', action="store", type=str, default='', dest='case_pattern',
 		help='Specify test cases pattern string')
 
-# Add sub-command and its arguments!
+	# Add sub-command and its arguments!
 	subparsers = parser.add_subparsers()
 
 	parser_host = subparsers.add_parser('host', help="Run this test framework on a host machine")
 	parser_host.set_defaults(func=run_cases_host)
-	parser_host = subparsers.add_parser('guest', help="Run this test framework on a VM")
-	parser_host.set_defaults(func=run_cases_guest)
+	
+	parser_guest = subparsers.add_parser('guest', help="Run this test framework on a linuxVM")
+	parser_guest.set_defaults(func=run_cases_guest)
+	
+	parser_chroot = subparsers.add_parser('chroot', help="Run this test framework on a chroot")
+	parser_chroot.set_defaults(func=run_cases_chroot)
+	
+	parser_android = subparsers.add_parser('android', help="Run this test framework on a androidVM")
+	parser_android.set_defaults(func=run_cases_android)
 
 	args = parser.parse_args()
-	dir_output = getattr(args, 'directory')
-	if dir_output == "":
-		g_directory = dir_output
-
+	
+	dir_output = getattr(args, 'directory', g_directory)
+	if dir_output == None:
+		dir_output = g_directory
 	g_bool_max_cpu = args.bool_max_cpu
 	g_bool_max_gpu = args.bool_max_gpu
 	g_ip_host = args.ip_host
 	g_ip_guest = args.ip_guest
-
+	g_ip_chroot = args.ip_chroot
 	g_test_cases = args.test_cases
 	g_case_pattern= args.case_pattern
+	
 
-	print(args)
-	#sys.exit(0)
-# Sanity Check
-	if not os.path.exists(g_directory):
-		os.makedirs(g_directory)
+	# Sanity Check
+	if not os.path.exists(dir_output):
+		os.makedirs(dir_output)
 
 	if g_bool_max_cpu:
 		subprocess.call(["./max_cpu.sh"] )
@@ -348,18 +428,17 @@ def main():
 	if g_bool_max_gpu:
 		subprocess.call(["./max_gpu.sh"])
 
-# Run test cases, distinguish host and guest which given by command arguments
+	# Run test cases, distinguish host and guest which given by command arguments
 	args.func()
 
 	#print(g_results_list)
 	g_fd_results = open(g_file_results, 'w')
-
 	g_fd_results.write('caseName, caseResult\n')
 	for key,value in g_results_list.items():
 		print('%s %s'%(key,value))
 		g_fd_results.write('%s, %s\n'%(key,value))
-
 	g_fd_results.close()
+
 
 if __name__ == "__main__":
     main()
