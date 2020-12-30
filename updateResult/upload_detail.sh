@@ -2,7 +2,8 @@
 #USERNAME="222"
 #PASSWORD=""
 #baseUrl="http://127.0.0.1:7001"
-baseUrl="http://10.239.156.21:7001"
+#baseUrl="https://10.239.156.21:8443"
+baseUrl="https://chromeos-web.sh.intel.com:8443"
 uploadResultUrl="upload/uploadEnvAndResult"
 uploadDetailUrl="upload/uploadDetail"
 USERNAME=""
@@ -16,7 +17,7 @@ TEMP=`getopt -o u:p:f: --long u-long,p-long:,f-long:: \
 [ $? -ne 0 ] && usage
 #eval set -- "${ARGS}"
 eval set -- "$TEMP"
-# get-opt
+# getopt -- process
 
 while true ; do
     case "$1" in
@@ -61,10 +62,12 @@ fi
 echo "test"
 #login------------------------------------------------------------------------------
 echo "loading to login"
-response=$(curl -d "userName=$USERNAME&userPassWord=$PASSWORD" "$baseUrl/login" -s)
-#echo $(parse_json "${response}" "message")
-#echo $(parse_json "${response}" "code")
-#echo $(parse_json "${response}" "token")
+#response=$(curl -d "userName=$USERNAME&passWord=$PASSWORD" "$baseUrl/generateInnerToken" -s)
+response=$(curl -d "userName=$USERNAME&passWord=$PASSWORD" "$baseUrl/generateInnerToken" -k)
+echo ${response}
+echo $(parse_json "${response}" "message")
+echo $(parse_json "${response}" "code")
+echo $(parse_json "${response}" "token")
 
 if [[ "$(parse_json "${response}" "code")" != 200 ]]
 then
@@ -77,7 +80,7 @@ echo "login success!"
 echo ${response}
 token=$(parse_json "${response}" "token")
 echo "loading to upload result"
-uploadResult=$(curl "$baseUrl/$uploadDetailUrl" -F "file=@$FILEPATH" -H "Authorization:$token")
+uploadResult=$(curl "$baseUrl/$uploadDetailUrl" -F "file=@$FILEPATH" -H "Authorization:$token" -k)
 if [ "$(parse_json "${uploadResult}" "code")" == 200  ]
 then
     echo "upload result success!"
