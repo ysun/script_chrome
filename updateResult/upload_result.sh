@@ -1,9 +1,9 @@
-#!/bin/bash
+﻿#!/bin/bash
 #USERNAME="222"
 #PASSWORD=""
 #baseUrl="http://127.0.0.1:7001"
 #baseUrl="https://10.239.156.21:8443"
-baseUrl="https://chromeos-web.sh.intel.com:8443"
+baseUrl="https://192.168.3.7:8443"
 uploadResultUrl="upload/uploadEnvAndResult"
 uploadDetailUrl="upload/uploadDetail"
 USERNAME=""
