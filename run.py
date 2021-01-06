@@ -16,19 +16,15 @@ import paramiko
 GBK = 'gbk'
 UTF8 = 'utf-8'
 current_encoding = GBK
-position = ""
 
 g_directory="/mnt/stateful_partition/results/"+time.strftime("%Y%m%d_%H%M%S")
-g_ip_current = [(s.connect(('8.8.8.8', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 g_ip_guest=""
 g_ip_host=""
 g_test_cases=[]
 g_case_pattern='TEMPLATE'
-
 g_results_list = dict()
 g_file_results = "%s/result.csv"%g_directory
 g_fd_results = None
-
 g_bool_max_cpu=False
 g_bool_max_gpu=False
 
@@ -405,8 +401,15 @@ def run_cases_guest():
 def run_cases_android(): 
 	print("Running test cases as a androidVM")
 	# For androidVm specified test case, create here
+	case = Case("fio-read", "adb shell /date/local/tmp/fio -direct=1 -ioengine=libaio -size=512M -name=/data/local/tmp/fio_read –group_reporting –runtime=600 –bs=4k -rw=read ", "android")
+	g_results_list[case.case_name] = case.result_parser(r'READ: \S* \((\S*)MB/s\)', 0)
+
+	case = Case("fio-write", "adb shell /date/local/tmp/fio -direct=1 -ioengine=libaio -size=512M -name=/data/local/tmp/fio_read –group_reporting –runtime=600 –bs=4k -rw=write ", "android")
+	g_results_list[case.case_name] = case.result_parser(r'WRITE: \S* \((\S*)MB/s\)', 0)
+
 	case = Case("geekbench_Single-Core-Score", "adb shell /data/local/tmp/geekbench_x86_64 --no-upload --cpu --single-core", "android")
 	g_results_list[case.case_name] = case.result_parser(r"Single-Core Score\s*([0-9]+)", 0)
+
 	case = Case("geekbench_Multi-Core-Score", "adb shell /data/local/tmp/geekbench_x86_64 --no-upload --cpu --multi-core", "android")
 	g_results_list[case.case_name] = case.result_parser(r"Multi-Core Score\s*([0-9]+)", 0)
 	# g_results_list[case.case_name + "_Single-Core-Score"] = case.result_parser(r"\d.*", 69)
